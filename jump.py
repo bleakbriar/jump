@@ -90,8 +90,14 @@ def dediJump(server, port):
     print("\t[SETUP] Root Key")
     payload = {"server" : server, "port" : port}
     r = requests.post("https://cpjump.inmotionhosting.com/dedtmpkeys/process-dedkey.php", data=payload, auth=(authUser, authPW), verify=False)
-    raw_input("\t[+] Press enter once key setup has been confirmed...")
-    os.system("ssh -o StrictHostKeyChecking=no -p " + port + " root@" + server + ".inmotionhosting.com")
+    #raw_input("\t[+] Press enter once key setup has been confirmed...")
+    ret_code = 1
+    sleep_time = 10
+    while ret_code != 0:
+        time.sleep(sleep_time)
+        ret_code = os.system("ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p " + port + " root@" + server + ".inmotionhosting.com")
+        sleep_time = sleep_time + 15
+
 
 def dediKeylessJump(server, port):
     print("\t [BYPASS] Skipping root key setup....")
