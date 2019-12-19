@@ -5,8 +5,12 @@ SSH Management System
 Automates SSH connections to VPS and Dedicated servers from desktop
 
 Author:  Bleakbriar
-Last modified 11/13/2019
+Last modified 12/12/2019
 
+Additional Credit:
+
+Krystal Amaia: origin of derrived code for direct user switching, see sharedjump()
+Thomas Granger: image()
 
 '''
 
@@ -19,14 +23,16 @@ from re import (search)
 
 #=== List of dedicated server prefixes ============================
 dedicatedPrefixes=["ded", "advanced", "elite", "cc"]
-sharedPrefixes=["biz", "ecbiz", "res", "ecres", "wp", "ld", "ecld", "ngx", "ecngx", "hub", "ehub", "whub"]
+sharedPrefixes=["biz", "ecbiz", "res", "ecres", "wp", "ld", "ecld", "ngx", "ecngx", "ehub", "whub"]
 #=== User credentials =============================================
 # Jumpstation
-jsUser = " "     
-jsIP = " " 
+jsUser = "" 
+jsIP = "" 
 # cpJump
-authUser = " "
-authPW = " "
+authUser = ""
+authPW = ""
+# ASCII art image file path
+imagePath = ''
 #=== Primary Functions ===============================================================
 
 requests.packages.urllib3.disable_warnings()
@@ -56,6 +62,7 @@ def getNode(server):
     else:
         print("[!] Unable to locate Node for " + server)
         return ""
+
 
 def vpsJump(server, flag):
     print("\t[CONNECTING] Routing via JumpStation...\n\n")
@@ -90,18 +97,35 @@ def dediKeylessJump(server, port):
     print("\t [BYPASS] Skipping root key setup....")
     os.system("ssh -o StrictHostKeyChecking=no -p " + port + " root@" + server + ".inmotionhosting.com")
 
-def sharedJump(server, js):
-    # Check if it's a reseller server, because they don't resolve by hostname sometimes, and just
-    # the jumpstation route
+def sharedJump(server, js, port):
+    # Note: port is being used to store username in this instance, as shared servers cannot have
+    # their SSH port altered.
+
+
+    # Check if it's a reseller server or not, and set the parent domain (inmotionhosting vs
+    # servconfig) appropriately
     if(server.lower().startswith("res") or server.lower().startswith("ecres")):
-        js = True
-    if(js):
-        print("\t[CONNECTING] Routing via Jumpstation")
-        jsCommand = "ssh -q -o StrictHostKeyChecking=no " + server
-        os.system('ssh -t ' + jsUser + '@' + jsIP + ' "' + jsCommand + '"')
+        parentDomain = ".servconfig.com"
+    elif(server.lower().startswith("ehub") or server.lower().startswith("whub")):
+        parentDomain = ".webhostinghub.com"
     else:
-        print("\t[CONNECTING] " + server)
-        os.system('ssh -q -o StrictHostKeyChecking=no ' + jsUser + "@" + server + ".inmotionhosting.com")
+        parentDomain = ".inmotionhosting.com"
+
+    if(type(port) is not int and js):
+        print("\t[ERROR] Cannot use -j with a direct user.")
+        print("\t\t[ABORTING]")
+    else:
+        if(js):
+            print("\t[CONNECTING] Routing via Jumpstation")
+            jsCommand = "ssh -q -o StrictHostKeyChecking=no " + server
+            os.system('ssh -t ' + jsUser + '@' + jsIP + ' "' + jsCommand + '"')
+        else:
+            if(port != '22'):   
+                print("\t[CONNECTING] " + server + " as " + port)
+                os.system('ssh -q -o StrictHostKeyChecking=no -t ' +jsUser + "@" + server + parentDomain + ' "' + "sudo /opt/tier1adv/bin/switch " + port + '"')
+            else:
+                print("\t[CONNECTING] " + server)
+                os.system('ssh -q -o StrictHostKeyChecking=no ' + jsUser + "@" + server + parentDomain)
 
 
 #=== Secondary Functions =====================================================================================================
@@ -158,13 +182,22 @@ def sharedHandler(args):
             print("[INVLAID]")
             print("\t[!] No jumpstation credentials configured")
         else:
-            sharedJump(args.server, args.jumpstation)
+            sharedJump(args.server, args.jumpstation, args.port)
         return True
     else:
         return False
 
+def image():
+    # Prints ASCII art if file exists
+    if(os.path.exists(imagePath)):
+        os.system('clear')
+        str = open(imagePath, 'r').read()
+        print
+        print(str)
+
 def main(args):
     bounceHandler(args)
+    image()
     if(args.gotoNode):
         print("\n\n[ACCESSING] Node")
     else:
@@ -174,15 +207,15 @@ def main(args):
     SharedSuccess = sharedHandler(args)
     if(not VPSSuccess and not DediSuccess and not SharedSuccess):
         print("[INVALID] Server name\n")
-     
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="SSH connection automation for shared, VPS, and dedicated servers")
     parser.add_argument("server")
-    parser.add_argument('port', nargs='?', default='22')
+    parser.add_argument("port", nargs='?', default='22')
     parser.add_argument("-n", "--node", help="Connect to the node housing the VPS container", action="store_true", dest='gotoNode', default=False)
     parser.add_argument("-k", "--keyless", help="Connect to a dedicated server without generating a new root key", action="store_true", dest='noKey', default=False)
     parser.add_argument("-b", "--bounce", help="Run a ping test, and then initate a connection once the server starts responding", action="store_true", dest='bounce', default=False)
     parser.add_argument("-j", "--jumpstation", help="Backup method to connect to a VPS, node, or shared server through jumpstation, should a direct connection fail", action="store_true", dest='jumpstation', default=False)
     args = parser.parse_args()
     main(args)
-    
