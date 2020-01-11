@@ -25,15 +25,7 @@ import signal, time
 #=== List of dedicated server prefixes ============================
 dedicatedPrefixes=["ded", "advanced", "elite", "cc"]
 sharedPrefixes=["biz", "ecbiz", "res", "ecres", "wp", "ld", "ecld", "ngx", "ecngx", "ehub", "whub"]
-#=== User credentials =============================================
-# Jumpstation
-#jsUser = "jeremyr"     
-#jsIP = "144.208.77.66" 
-# cpJump
-#authUser = "jeremyr"
-#authPW = "DgunKdzF2KKgUkX5RLqR"
-# ASCII art image file path
-#imagePath = '/home/bleakbriar/bin/asciimage.txt'
+
 #=== Primary Functions ===============================================================
 
 requests.packages.urllib3.disable_warnings()
