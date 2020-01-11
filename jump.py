@@ -5,7 +5,7 @@ SSH Management System
 Automates SSH connections to VPS and Dedicated servers from desktop
 
 Author:  Bleakbriar
-Last modified 12/19/2019
+Last modified 01/09/2020
 
 Additional Credit:
 
@@ -20,15 +20,31 @@ import os
 import time
 from urllib import (urlencode, urlopen)
 from re import (search)
+import signal, time
 
 #=== List of dedicated server prefixes ============================
 dedicatedPrefixes=["ded", "advanced", "elite", "cc"]
 sharedPrefixes=["biz", "ecbiz", "res", "ecres", "wp", "ld", "ecld", "ngx", "ecngx", "ehub", "whub"]
-
+#=== User credentials =============================================
+# Jumpstation
+#jsUser = "jeremyr"     
+#jsIP = "144.208.77.66" 
+# cpJump
+#authUser = "jeremyr"
+#authPW = "DgunKdzF2KKgUkX5RLqR"
+# ASCII art image file path
+#imagePath = '/home/bleakbriar/bin/asciimage.txt'
 #=== Primary Functions ===============================================================
 
 requests.packages.urllib3.disable_warnings()
 
+# Pulls user details from the jump.conf file
+# Details are one per line for a total of 4-5 lines:
+# Jumpstation username
+# Jumpstation IP address
+# CPJump username
+# CPJump password
+# Path to ASCII art file (Optional)
 pathstart = os.path.dirname(os.path.realpath(__file__))
 filename = pathstart + "/jump.conf"
 with open(filename) as f:
@@ -43,22 +59,46 @@ if len(content) == 5:
 else:
     imagePath = ""
 
+# Custom exception for use with sWait function
+class TimeoutError(Exception):
+    pass
 
+# Skippable wait
+# Waits for a specified period of time before returning. 
+# Will return earlier if enter is pressed
+# Returns true if enter pressed and false if full wait time passed
+def sWait(timeout):
+    def timeout_error(*_):
+	raise TimeoutError
+    signal.signal(signal.SIGALRM, timeout_error)
+    signal.alarm(timeout)
+    try:
+	raw_input()
+	signal.alarm(0)
+	return True
+    except TimeoutError:
+	signal.signal(signal.SIGALRM, signal.SIG_IGN)
+	return False
+
+# Returns true if servername can be identified as a VPS
 def isVPS(server):
     return server.lower().startswith("vps")
 
+# Returns true if servername can be identified as a dedicated server
 def isDedi(server):
     for serverType in dedicatedPrefixes:
 	if(server.lower().startswith(serverType)):
 	    return True
     return False
 
+# Returns true if servername can be identified as a shared server
 def isShared(server):
     for serverType in sharedPrefixes:
 	if(server.lower().startswith(serverType)):
 	    return True
     return False
 
+# Uses systemcenter to get the node hosting a VPS server
 def getNode(server):
     vpsNum = server[3:]
     result = urlopen('https://imhsc.imhadmin.net/blocks/VPS/vps_resultfind.php', urlencode({'vps':vpsNum})).read()
@@ -70,12 +110,13 @@ def getNode(server):
 	print("[!] Unable to locate Node for " + server)
 	return ""
 
-
+# Connects to Jumpstation then into VPS server through vpsfind
 def vpsJump(server, flag):
     print("\t[CONNECTING] Routing via JumpStation...\n\n")
     jsCommand = "vpsfind " + server[3:] + " " + flag
     os.system('ssh -t ' + jsUser + '@' + jsIP + ' "' + jsCommand + '"')
 
+# Connects directly to VPS server node and then into container
 def vpsDirectJump(server, flag):
     vpsNum = server[3:]
     sshCommand = "ssh -t -oConnectTimeout=7 -o StrictHostKeyChecking=no -o PasswordAuthentication=no"
@@ -93,6 +134,9 @@ def vpsDirectJump(server, flag):
 	print("\t[CONNECTING] " + server)
     os.system(sshCommand + " " + vNodeAddress + " " + nodeCommand)
 
+# Sets up root key on dedicated server, then periodically attempts to connect
+# Wait time for connection starts at 15 seconds and increased by 15 seconds for each failure
+# Wait can be skipped by pressing enter
 def dediJump(server, port):
     print("\t[SETUP] Root Key")
     payload = {"server" : server, "port" : port}
@@ -102,10 +146,12 @@ def dediJump(server, port):
     ret_code = 1
     sleep_time = 15
     while ret_code != 0:
-	time.sleep(sleep_time)
-	ret_code = os.system("ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p " + port + " root@" + server + ".inmotionhosting.com")
+	#time.sleep(sleep_time)
+	sWait(sleep_time)
+	ret_code = os.system("ssh -o StrictHostKeyChecking=no -o PasswordAuthentication=no -p " + port + " root@" + server + ".inmotionhosting.com 2> /dev/null ")
 	sleep_time = sleep_time + 15
 
+# Direct SSH connection to server, skipping root key setup
 def dediKeylessJump(server, port):
     print("\t [BYPASS] Skipping root key setup....")
     os.system("ssh -o StrictHostKeyChecking=no -p " + port + " root@" + server + ".inmotionhosting.com")
